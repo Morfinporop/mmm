@@ -56,16 +56,38 @@ app.get('/api/health', async (req, res) => {
   }
 })
 
-// Обработка ошибок
+// Обработка ошибок - всегда возвращаем JSON
 app.use((err, req, res, next) => {
-  console.error('Ошибка:', err.message)
-  console.error('Stack:', err.stack)
-  res.status(500).json({ error: 'Внутренняя ошибка сервера', details: err.message })
+  console.error('❌ Ошибка:', err.message)
+  if (err.stack) {
+    console.error('Stack:', err.stack.substring(0, 500))
+  }
+  
+  const status = err.status || 500
+  res.status(status).json({ 
+    error: err.message || 'Внутренняя ошибка сервера',
+    status: status,
+    timestamp: new Date().toISOString(),
+  })
 })
 
-// 404
+// 404 - всегда JSON
 app.use((req, res) => {
-  res.status(404).json({ error: 'Не найдено', path: req.path })
+  res.status(404).json({ 
+    error: 'Не найдено', 
+    path: req.path,
+    method: req.method,
+  })
+})
+
+// Обработка незавершённых запросов
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    if (!res.headersSent) {
+      console.warn('Response not sent for:', req.method, req.path)
+    }
+  })
+  next()
 })
 
 // Запуск сервера

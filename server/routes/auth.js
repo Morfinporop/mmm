@@ -8,6 +8,12 @@ import dotenv from 'dotenv'
 dotenv.config()
 const router = express.Router()
 
+// Middleware для логирования
+router.use((req, res, next) => {
+  console.log(`Auth request: ${req.method} ${req.path}`)
+  next()
+})
+
 // Регистрация
 router.post('/register', async (req, res) => {
   try {

@@ -8,7 +8,7 @@ const getApiUrl = () => {
   // Для Railway - определяем по домену
   const host = window.location.hostname
   if (host.includes('railway.app') || host.includes('up.railway.app')) {
-    return '/api'  // Прокси через Vite
+    return 'https://mmm-production.up.railway.app/api'
   }
   
   // Локальная разработка
@@ -16,6 +16,8 @@ const getApiUrl = () => {
 }
 
 const API_URL = getApiUrl()
+
+console.log('🔗 API URL:', API_URL)
 
 class ApiClient {
   constructor() {
@@ -40,18 +42,52 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${this.token}`
     }
 
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      ...options,
-      headers,
-    })
-
-    const data = await response.json()
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Ошибка запроса')
+    // Не добавляем Content-Type для FormData
+    if (!(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json'
     }
 
-    return data
+    try {
+      console.log('📡 Request:', endpoint, options.method || 'GET')
+      
+      const response = await fetch(`${API_URL}${endpoint}`, {
+        ...options,
+        headers,
+      })
+
+      console.log('📥 Response status:', response.status)
+
+      // Проверяем статус
+      if (!response.ok) {
+        let errorData
+        try {
+          errorData = await response.json()
+        } catch {
+          errorData = { error: `HTTP ${response.status}` }
+        }
+        throw new Error(errorData.error || 'Ошибка запроса')
+      }
+
+      // Пустой ответ
+      const text = await response.text()
+      if (!text) {
+        return {}
+      }
+
+      // Парсим JSON
+      try {
+        return JSON.parse(text)
+      } catch (err) {
+        console.error('JSON parse error:', err, 'Response:', text.substring(0, 200))
+        throw new Error('Сервер вернул некорректный ответ')
+      }
+    } catch (err) {
+      console.error('API Error:', err.message)
+      if (err.message.includes('Failed to fetch')) {
+        throw new Error('Не удалось подключиться к серверу. Проверьте интернет-соединение.')
+      }
+      throw err
+    }
   }
 
   // Auth
@@ -59,7 +95,6 @@ class ApiClient {
     const data = await this.request('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ email, password, name }),
-      headers: { 'Content-Type': 'application/json' },
     })
     this.setToken(data.token)
     return data.user
@@ -69,7 +104,6 @@ class ApiClient {
     const data = await this.request('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
-      headers: { 'Content-Type': 'application/json' },
     })
     this.setToken(data.token)
     return data.user
@@ -89,7 +123,6 @@ class ApiClient {
     return this.request('/auth/profile', {
       method: 'PUT',
       body: JSON.stringify(profile),
-      headers: { 'Content-Type': 'application/json' },
     })
   }
 
