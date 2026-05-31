@@ -20,11 +20,17 @@ pool.on('error', (err) => {
   console.error('❌ Ошибка подключения к БД:', err.message)
 })
 
-// Создание таблиц
+// Автоматическое создание таблиц при подключении
 export async function initDB() {
+  const client = await pool.connect()
+  
   try {
-    await pool.query(`
-      -- Пользователи
+    console.log('📊 Создание таблиц базы данных...')
+    
+    await client.query('BEGIN')
+    
+    // Пользователи
+    await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         email VARCHAR(255) UNIQUE NOT NULL,
@@ -36,9 +42,12 @@ export async function initDB() {
         genre VARCHAR(100) DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      -- Треки
+      )
+    `)
+    console.log('✅ Таблица users создана')
+    
+    // Треки
+    await client.query(`
       CREATE TABLE IF NOT EXISTS tracks (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -54,37 +63,52 @@ export async function initDB() {
         plays INTEGER DEFAULT 0,
         downloads INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      -- Лайки
+      )
+    `)
+    console.log('✅ Таблица tracks создана')
+    
+    // Лайки
+    await client.query(`
       CREATE TABLE IF NOT EXISTS likes (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID REFERENCES users(id) ON DELETE CASCADE,
         track_id UUID REFERENCES tracks(id) ON DELETE CASCADE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_id, track_id)
-      );
-
-      -- Скачивания (для статистики)
+      )
+    `)
+    console.log('✅ Таблица likes создана')
+    
+    // Скачивания
+    await client.query(`
       CREATE TABLE IF NOT EXISTS downloads_log (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID REFERENCES users(id) ON DELETE SET NULL,
         track_id UUID REFERENCES tracks(id) ON DELETE CASCADE,
         downloaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      -- Индексы для производительности
+      )
+    `)
+    console.log('✅ Таблица downloads_log создана')
+    
+    // Индексы
+    await client.query(`
       CREATE INDEX IF NOT EXISTS idx_tracks_user_id ON tracks(user_id);
       CREATE INDEX IF NOT EXISTS idx_tracks_category ON tracks(category);
       CREATE INDEX IF NOT EXISTS idx_tracks_created ON tracks(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_likes_user ON likes(user_id);
       CREATE INDEX IF NOT EXISTS idx_likes_track ON likes(track_id);
     `)
-
-    console.log('✅ Таблицы созданы успешно')
+    console.log('✅ Индексы созданы')
+    
+    await client.query('COMMIT')
+    console.log('✅ База данных полностью инициализирована')
+    
   } catch (err) {
-    console.error('❌ Ошибка создания таблиц:', err.message)
+    await client.query('ROLLBACK')
+    console.error('❌ Ошибка инициализации БД:', err.message)
     throw err
+  } finally {
+    client.release()
   }
 }
 

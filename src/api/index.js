@@ -1,4 +1,21 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+// Определяем API URL автоматически
+const getApiUrl = () => {
+  // Если есть переменная окружения - используем её
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL
+  }
+  
+  // Для Railway - определяем по домену
+  const host = window.location.hostname
+  if (host.includes('railway.app') || host.includes('up.railway.app')) {
+    return '/api'  // Прокси через Vite
+  }
+  
+  // Локальная разработка
+  return 'http://localhost:3000/api'
+}
+
+const API_URL = getApiUrl()
 
 class ApiClient {
   constructor() {
