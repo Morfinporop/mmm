@@ -1,0 +1,91 @@
+import { Pool } from 'pg'
+import dotenv from 'dotenv'
+
+dotenv.config()
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+})
+
+// Проверка подключения
+pool.on('connect', () => {
+  console.log('✅ Подключено к PostgreSQL')
+})
+
+pool.on('error', (err) => {
+  console.error('❌ Ошибка подключения к БД:', err.message)
+})
+
+// Создание таблиц
+export async function initDB() {
+  try {
+    await pool.query(`
+      -- Пользователи
+      CREATE TABLE IF NOT EXISTS users (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        avatar TEXT DEFAULT '',
+        banner TEXT DEFAULT '',
+        bio TEXT DEFAULT '',
+        genre VARCHAR(100) DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Треки
+      CREATE TABLE IF NOT EXISTS tracks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        artist VARCHAR(255) NOT NULL,
+        duration NUMERIC DEFAULT 0,
+        category VARCHAR(50) DEFAULT 'Другое',
+        cover TEXT DEFAULT '',
+        audio_data BYTEA,
+        size BIGINT DEFAULT 0,
+        is_quick BOOLEAN DEFAULT FALSE,
+        is_meme BOOLEAN DEFAULT FALSE,
+        plays INTEGER DEFAULT 0,
+        downloads INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Лайки
+      CREATE TABLE IF NOT EXISTS likes (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        track_id UUID REFERENCES tracks(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, track_id)
+      );
+
+      -- Скачивания (для статистики)
+      CREATE TABLE IF NOT EXISTS downloads_log (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        track_id UUID REFERENCES tracks(id) ON DELETE CASCADE,
+        downloaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Индексы для производительности
+      CREATE INDEX IF NOT EXISTS idx_tracks_user_id ON tracks(user_id);
+      CREATE INDEX IF NOT EXISTS idx_tracks_category ON tracks(category);
+      CREATE INDEX IF NOT EXISTS idx_tracks_created ON tracks(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_likes_user ON likes(user_id);
+      CREATE INDEX IF NOT EXISTS idx_likes_track ON likes(track_id);
+    `)
+
+    console.log('✅ Таблицы созданы успешно')
+  } catch (err) {
+    console.error('❌ Ошибка создания таблиц:', err.message)
+    throw err
+  }
+}
+
+export default pool
