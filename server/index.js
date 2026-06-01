@@ -1,21 +1,15 @@
 import express from 'express'
 import cors from 'cors'
-import dotenv from 'dotenv'
 import pool, { initDB } from './db.js'
 import authRoutes from './routes/auth.js'
 import trackRoutes from './routes/tracks.js'
 
-dotenv.config()
-
 const app = express()
 const PORT = process.env.PORT || 3000
 
-console.log('🔧 Конфигурация:', {
-  PORT,
-  CORS: process.env.CORS_ORIGIN,
-  DB: process.env.DATABASE_URL ? 'подключено' : 'НЕ ПОДКЛЮЧЕНО',
-  JWT: process.env.JWT_SECRET ? 'настроен' : 'НЕ НАСТРОЕН',
-})
+console.log('🔧 MTRX Server запускается...')
+console.log('📊 Database: Railway PostgreSQL (из переменных)')
+console.log('🔐 JWT_SECRET:', process.env.JWT_SECRET ? 'настроен' : '⚠️ НЕ НАСТРОЕН!')
 
 // Middleware
 app.use(cors({
@@ -35,14 +29,18 @@ app.use((req, res, next) => {
 app.use('/api/auth', authRoutes)
 app.use('/api/tracks', trackRoutes)
 
-// Health check с детальной информацией
+// Health check
 app.get('/api/health', async (req, res) => {
   try {
     const result = await pool.query('SELECT 1')
+    const tables = await pool.query(`
+      SELECT table_name FROM information_schema.tables 
+      WHERE table_schema = 'public'
+    `)
     res.json({ 
       status: 'ok', 
       database: 'connected',
-      tables: 'initialized',
+      tables: tables.rows.map(t => t.table_name),
       timestamp: new Date().toISOString(),
     })
   } catch (err) {
@@ -80,25 +78,13 @@ app.use((req, res) => {
   })
 })
 
-// Обработка незавершённых запросов
-app.use((req, res, next) => {
-  res.on('finish', () => {
-    if (!res.headersSent) {
-      console.warn('Response not sent for:', req.method, req.path)
-    }
-  })
-  next()
-})
-
 // Запуск сервера
 async function start() {
   try {
-    // Проверка переменных окружения
-    if (!process.env.DATABASE_URL) {
-      throw new Error('DATABASE_URL не установлен! Проверьте server/.env')
-    }
+    // Проверка JWT_SECRET
     if (!process.env.JWT_SECRET) {
-      throw new Error('JWT_SECRET не установлен! Проверьте server/.env')
+      console.warn('⚠️ JWT_SECRET не установлен, используем default')
+      process.env.JWT_SECRET = 'mtrx-default-jwt-secret-change-in-production'
     }
 
     // Инициализация БД

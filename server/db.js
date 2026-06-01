@@ -1,14 +1,19 @@
 import { Pool } from 'pg'
-import dotenv from 'dotenv'
 
-dotenv.config()
+// Используем DATABASE_URL из переменных окружения Railway (внутренний)
+// Если нет - пробуем PUBLIC_URL как запасной вариант
+const DATABASE_URL = process.env.DATABASE_URL || 
+                     process.env.DATABASE_PUBLIC_URL ||
+                     'postgresql://postgres:awbBWWjbhjPlLIxNnxcWEsJIFLwieAFw@postgres.railway.internal:5432/railway'
+
+console.log('📊 Database URL:', DATABASE_URL.substring(0, 30) + '...')
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 10000,
 })
 
 // Проверка подключения
